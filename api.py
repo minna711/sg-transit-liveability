@@ -23,11 +23,31 @@ log = logging.getLogger(__name__)
 
 BBox = tuple[float, float, float, float]
 
+# Fallback hardcoded districts (used when planning areas not yet fetched)
 KNOWN_DISTRICTS = {
     "marine_parade": (103.893, 103.935, 1.295, 1.316),
     "downtown_cbd":  (103.845, 103.865, 1.277, 1.295),
     "tengah":        (103.720, 103.760, 1.360, 1.390),
 }
+
+
+def get_all_districts() -> dict[str, tuple]:
+    """
+    Return all available districts as {name: bbox}.
+    Uses all 55 planning areas from OneMap if available,
+    falls back to hardcoded 3 districts.
+    """
+    try:
+        from hdb.planning_areas import load_all_planning_areas
+        areas = load_all_planning_areas()
+        if areas:
+            return {
+                a["name"].title(): (a["min_lon"], a["max_lon"], a["min_lat"], a["max_lat"])
+                for a in areas
+            }
+    except Exception:
+        pass
+    return KNOWN_DISTRICTS
 
 
 class ScoreResponse(BaseModel):
@@ -63,11 +83,12 @@ def evaluate_district(bbox: BBox, store: DataStore) -> DistrictMetrics:
 
 def rank_districts(store: DataStore) -> list[dict]:
     """
-    Tier-1 bonus: score all known districts and return sorted leaderboard.
-    In live mode each call hits the shared DataStore — no extra API calls needed.
+    Tier-1 bonus: score ALL Singapore planning areas and return sorted leaderboard.
+    Uses all 55 OneMap planning areas if available, falls back to 3 hardcoded districts.
     """
-    results = []
-    for name, bbox in KNOWN_DISTRICTS.items():
+    districts = get_all_districts()
+    results   = []
+    for name, bbox in districts.items():
         m = compute_metrics(store, bbox)
         results.append({
             "district": name,
