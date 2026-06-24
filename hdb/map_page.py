@@ -339,3 +339,106 @@ def render_map_page():
         s3.metric("Total transactions", f"{trend_df['num_transactions'].sum():,}")
     else:
         st.info("No price trend data for this town yet.")
+
+    # ── Block popup card ────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("📍 Block transport profile")
+    st.caption("Enter any HDB block coordinates to see its real-time transport profile")
+
+    col_lat, col_lng, col_btn = st.columns([2, 2, 1])
+    input_lat = col_lat.number_input("Latitude",  value=1.3022, format="%.4f",
+                                      help="e.g. 1.3022 for Marine Parade")
+    input_lng = col_lng.number_input("Longitude", value=103.9068, format="%.4f",
+                                      help="e.g. 103.9068 for Marine Parade")
+    fetch_btn = col_btn.button("🔍 Fetch", use_container_width=True)
+
+    if fetch_btn:
+        with st.spinner("Fetching transport profile..."):
+            try:
+                from hdb.onemap_services import get_block_transport_profile
+                profile = get_block_transport_profile(input_lat, input_lng)
+
+                card_left, card_right = st.columns(2)
+
+                with card_left:
+                    addr = profile.get("address")
+                    if addr:
+                        st.markdown(f"### 📍 {addr.get('address', 'Unknown')}")
+                        if addr.get("postal_code"):
+                            st.caption(f"S{addr['postal_code']}")
+                    else:
+                        st.markdown(f"### 📍 ({input_lat:.4f}, {input_lng:.4f})")
+
+                    st.markdown("---")
+
+                    mrt      = profile.get("nearest_mrt", {})
+                    mrt_name = mrt.get("name", "Unknown")
+                    mrt_dist = mrt.get("distance_label", "?")
+                    mrt_walk = mrt.get("walking_min", "?")
+                    st.metric("🚇 Nearest MRT", mrt_name,
+                              delta=f"{mrt_dist} · {mrt_walk} min walk" if mrt_walk else mrt_dist)
+
+                    bus      = profile.get("nearest_bus", {})
+                    bus_name = bus.get("description", "Unknown")
+                    bus_dist = bus.get("distance_label", "?")
+                    bus_walk = bus.get("walking_min", "?")
+                    bus_num  = bus.get("num_stops", 0)
+                    st.metric("🚌 Nearest bus stop", bus_name,
+                              delta=f"{bus_dist} · {bus_walk} min walk · {bus_num} stops nearby")
+
+                    commute = profile.get("cbd_commute")
+                    if commute:
+                        st.metric("⏱️ Commute to CBD",
+                                  f"{commute['total_time_min']} min by PT",
+                                  delta=f"{commute.get('num_transfers', 0)} transfer(s)")
+                    else:
+                        st.metric("⏱️ Commute to CBD", "N/A")
+
+                with card_right:
+                    try:
+                        from hdb.analytics import get_block_prices
+                        nearby = get_block_prices(flat_type=selected_flat, months=6)
+                        if not nearby.empty:
+                            nearby["dist"] = (
+                                (nearby["latitude"]  - input_lat).abs() +
+                                (nearby["longitude"] - input_lng).abs()
+                            )
+                            closest   = nearby.nsmallest(5, "dist")
+                            avg_price = closest["resale_price"].mean()
+                            min_price = closest["resale_price"].min()
+                            max_price = closest["resale_price"].max()
+                            st.metric("💰 Nearby avg price", f"S${avg_price:,.0f}",
+                                      delta=f"S${min_price:,.0f} – S${max_price:,.0f} range")
+                    except Exception:
+                        st.metric("💰 Nearby avg price", "N/A")
+
+                    try:
+                        r = requests.get(
+                            "http://127.0.0.1:8000/evaluate",
+                            params={"min_lon": input_lng - 0.005,
+                                    "max_lon": input_lng + 0.005,
+                                    "min_lat": input_lat - 0.005,
+                                    "max_lat": input_lat + 0.005},
+                            timeout=3,
+                        ).json()
+                        score      = r.get("connectivity_score", 0)
+                        verdict    = r.get("verdict", "")
+                        taxi_count = r.get("taxi_count", 0)
+                        bus_score  = r.get("bus_frequency_score", 0)
+                        dist_m     = mrt.get("distance_m", 9999)
+
+                        st.metric("📊 Connectivity score", f"{score:.1f}/100", delta=verdict)
+                        st.metric("🚕 Live taxis nearby",  taxi_count)
+                        st.metric("🚌 Bus frequency score", f"{bus_score:.1f}/100")
+
+                        if   dist_m <= 500:  mrt_s, mrt_l = 100, "✅ Walking distance"
+                        elif dist_m <= 1000: mrt_s, mrt_l =  70, "🟡 Short ride"
+                        elif dist_m <= 2000: mrt_s, mrt_l =  40, "⚠️ Some distance"
+                        else:                mrt_s, mrt_l =  10, "❌ Far from MRT"
+                        st.metric("🚇 MRT proximity", f"{mrt_s}/100", delta=mrt_l)
+
+                    except Exception:
+                        st.info("Start the pipeline to see live scores!")
+
+            except Exception as e:
+                st.error(f"Error: {e}")
