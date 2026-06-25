@@ -3,11 +3,11 @@
 
 # Databases (too big + personal data)
 data/transport.db
-data/hdb.duckdb
-data/hdb.duckdb.wal
 data/*.db
-data/*.duckdb
 data/*.wal
+
+# EXCEPTION: Allow Git to track hdb.duckdb
+!data/hdb.duckdb
 
 # ML models (recreatable from seed)
 data/models/
