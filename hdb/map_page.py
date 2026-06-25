@@ -140,98 +140,18 @@ def render_map_page():
         st.warning("No geocoded HDB data yet!")
         return
 
-    # ── Map ────────────────────────────────────────────────────────────────────
-    fig = go.Figure()
+    # ── Leaflet Map ───────────────────────────────────────────────────────────
+    from pathlib import Path
+    import streamlit.components.v1 as components
 
-    if not block_df.empty:
-        fig.add_trace(go.Densitymapbox(
-            lat=block_df["latitude"],
-            lon=block_df["longitude"],
-            z=block_df["resale_price"],
-            radius=25,
-            colorscale="RdYlGn_r",
-            zmin=block_df["resale_price"].quantile(0.1),
-            zmax=block_df["resale_price"].quantile(0.9),
-            name="HDB Resale Price",
-            colorbar=dict(title="Resale Price (S$)", x=1.02),
-            opacity=0.7,
-        ))
-
-    if not town_df.empty:
-        fig.add_trace(go.Scattermapbox(
-            lat=town_df["lat"],
-            lon=town_df["lng"],
-            mode="markers+text",
-            marker=dict(
-                size=town_df["num_transactions"] / town_df["num_transactions"].max() * 20 + 8,
-                color=town_df["avg_price"],
-                colorscale="RdYlGn_r",
-                showscale=False,
-                opacity=0.85,
-            ),
-            text=town_df["town"].str.title(),
-            textposition="top center",
-            customdata=town_df[["avg_price","num_transactions","median_price"]].values,
-            hovertemplate=(
-                "<b>%{text}</b><br>"
-                "Avg: S$%{customdata[0]:,.0f}<br>"
-                "Median: S$%{customdata[2]:,.0f}<br>"
-                "Transactions: %{customdata[1]}<extra></extra>"
-            ),
-            name="Towns",
-        ))
-
-    if show_mrt:
-        mrt_df = pd.DataFrame(MRT_STATIONS)
-        for line, color in MRT_LINE_COLORS.items():
-            line_df = mrt_df[mrt_df["line"] == line]
-            if line_df.empty: continue
-            fig.add_trace(go.Scattermapbox(
-                lat=line_df["lat"], lon=line_df["lng"],
-                mode="markers",
-                marker=dict(size=6, color=color, symbol="circle"),
-                text=line_df["name"],
-                hovertemplate=f"<b>%{{text}}</b><br>{line} Line<extra></extra>",
-                name=f"{line} Line", opacity=0.6,
-            ))
-
-    if show_districts:
-        for dname, (min_lon, max_lon, min_lat, max_lat) in DISTRICT_BBOXES.items():
-            fig.add_trace(go.Scattermapbox(
-                lat=[min_lat, min_lat, max_lat, max_lat, min_lat],
-                lon=[min_lon, max_lon, max_lon, min_lon, min_lon],
-                mode="lines",
-                line=dict(color="#00BCD4", width=2),
-                fill="toself", fillcolor="rgba(0,188,212,0.1)",
-                name=dname, hoverinfo="name",
-            ))
-
-    if show_taxi:
-        centers = {
-            "marine_parade": (1.3058, 103.9068),
-            "downtown_cbd":  (1.2850, 103.8550),
-            "tengah":        (1.3725, 103.7400),
-        }
-        taxi_points = []
-        for district_key, (lat, lng) in centers.items():
-            rows = fetch_snapshots(district_key, minutes=30)
-            if rows:
-                taxi_points.append({"lat": lat, "lng": lng, "count": rows[-1]["taxi_count"]})
-        if taxi_points:
-            taxi_df = pd.DataFrame(taxi_points)
-            fig.add_trace(go.Densitymapbox(
-                lat=taxi_df["lat"], lon=taxi_df["lng"], z=taxi_df["count"],
-                radius=40,
-                colorscale=[[0,"rgba(0,0,255,0)"],[1,"rgba(0,0,255,0.5)"]],
-                name="Taxi density", showscale=False, opacity=0.4,
-            ))
-
-    fig.update_layout(
-        mapbox=dict(style="open-street-map", center=dict(lat=1.3521, lon=103.8198), zoom=11),
-        height=600, margin=dict(l=0,r=0,t=0,b=0),
-        legend=dict(orientation="v", x=0, y=1, bgcolor="rgba(0,0,0,0.5)", font=dict(color="white")),
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    map_html_path = Path(__file__).parent.parent / "dashboard" / "sg_map.html"
+    if map_html_path.exists():
+        with open(map_html_path, "r", encoding="utf-8") as f:
+            map_html = f.read()
+        st.caption("💡 Click anywhere on the map to see the connectivity score! Click an HDB area for full details.")
+        components.html(map_html, height=540, scrolling=False)
+    else:
+        st.warning("Map file not found — make sure sg_map.html is in dashboard/ folder!")
 
     st.markdown("---")
 

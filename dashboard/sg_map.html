@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SG Transit Map</title>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<!-- Leaflet Heatmap plugin -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0e1117;
+    color: #fafafa;
+  }
+
+  #map {
+    width: 100%;
+    height: 520px;
+    border-radius: 8px;
+    z-index: 1;
+  }
+
+  /* Popup card styles */
+  .leaflet-popup-content-wrapper {
+    background: #1a1d27;
+    border: 1px solid #2d3748;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    color: #fafafa;
+    min-width: 280px;
+  }
+
+  .leaflet-popup-tip {
+    background: #1a1d27;
+  }
+
+  .popup-card {
+    padding: 4px;
+  }
+
+  .popup-header {
+    font-size: 14px;
+    font-weight: 700;
+    color: #63b3ed;
+    margin-bottom: 4px;
+  }
+
+  .popup-postal {
+    font-size: 11px;
+    color: #718096;
+    margin-bottom: 10px;
+  }
+
+  .popup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .popup-metric {
+    background: #2d3748;
+    border-radius: 8px;
+    padding: 8px;
+  }
+
+  .popup-metric-label {
+    font-size: 10px;
+    color: #a0aec0;
+    margin-bottom: 2px;
+  }
+
+  .popup-metric-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fafafa;
+  }
+
+  .popup-metric-sub {
+    font-size: 10px;
+    color: #68d391;
+    margin-top: 2px;
+  }
+
+  .popup-score {
+    background: linear-gradient(135deg, #2b6cb0, #2c7a7b);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  .popup-score-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: #fafafa;
+  }
+
+  .popup-score-label {
+    font-size: 11px;
+    color: #bee3f8;
+  }
+
+  .popup-buses {
+    background: #2d3748;
+    border-radius: 8px;
+    padding: 8px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .popup-bus-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    border-bottom: 1px solid #4a5568;
+    font-size: 12px;
+  }
+
+  .popup-bus-row:last-child { border-bottom: none; }
+
+  .bus-badge {
+    background: #2b6cb0;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 11px;
+    min-width: 32px;
+    text-align: center;
+  }
+
+  .bus-time { color: #fbd38d; font-weight: 600; }
+  .bus-load { color: #a0aec0; font-size: 10px; }
+
+  /* Legend */
+  .legend {
+    position: absolute;
+    bottom: 20px;
+    right: 10px;
+    z-index: 1000;
+    background: rgba(26, 29, 39, 0.95);
+    border: 1px solid #2d3748;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    min-width: 130px;
+  }
+
+  .legend-title {
+    font-weight: 700;
+    color: #63b3ed;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    color: #e2e8f0;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .legend-line {
+    width: 20px;
+    height: 3px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* District label */
+  .district-label {
+    background: rgba(26, 29, 39, 0.9);
+    border: 1px solid #63b3ed;
+    border-radius: 4px;
+    padding: 2px 6px;
+    color: #63b3ed;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  /* Loading overlay */
+  #loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2000;
+    background: rgba(14,17,23,0.85);
+    padding: 16px 24px;
+    border-radius: 10px;
+    color: #63b3ed;
+    font-size: 14px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div style="position:relative;">
+  <div id="map"></div>
+  <div id="loading">⏳ Loading transport data...</div>
+</div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────────────────────
+const API_BASE   = "http://127.0.0.1:8000";
+const ONEMAP_URL = "https://www.onemap.gov.sg/api/common/elastic/search";
+
+// MRT line colors
+const MRT_COLORS = {
+  EWL: "#009645",
+  NSL: "#D42E12",
+  NEL: "#9900AA",
+  CCL: "#FA9E0D",
+  DTL: "#005EC4",
+  TEL: "#9D5B25",
+};
+
+// MRT stations
+const MRT_STATIONS = [
+  // EWL
+  {name:"Jurong East",    lat:1.3330,lng:103.7421,line:"EWL"},
+  {name:"Clementi",       lat:1.3152,lng:103.7651,line:"EWL"},
+  {name:"Buona Vista",    lat:1.3072,lng:103.7900,line:"EWL"},
+  {name:"Queenstown",     lat:1.2942,lng:103.8059,line:"EWL"},
+  {name:"City Hall",      lat:1.2931,lng:103.8520,line:"EWL"},
+  {name:"Tampines",       lat:1.3540,lng:103.9454,line:"EWL"},
+  {name:"Pasir Ris",      lat:1.3731,lng:103.9494,line:"EWL"},
+  // NSL
+  {name:"Woodlands",      lat:1.4370,lng:103.7866,line:"NSL"},
+  {name:"Yishun",         lat:1.4296,lng:103.8350,line:"NSL"},
+  {name:"Ang Mo Kio",     lat:1.3699,lng:103.8495,line:"NSL"},
+  {name:"Bishan",         lat:1.3510,lng:103.8480,line:"NSL"},
+  {name:"Toa Payoh",      lat:1.3323,lng:103.8474,line:"NSL"},
+  {name:"Orchard",        lat:1.3047,lng:103.8318,line:"NSL"},
+  {name:"Raffles Place",  lat:1.2830,lng:103.8513,line:"NSL"},
+  // NEL
+  {name:"HarbourFront",   lat:1.2653,lng:103.8209,line:"NEL"},
+  {name:"Chinatown",      lat:1.2844,lng:103.8444,line:"NEL"},
+  {name:"Little India",   lat:1.3066,lng:103.8493,line:"NEL"},
+  {name:"Serangoon",      lat:1.3499,lng:103.8731,line:"NEL"},
+  {name:"Hougang",        lat:1.3713,lng:103.8921,line:"NEL"},
+  {name:"Punggol",        lat:1.4053,lng:103.9022,line:"NEL"},
+  // CCL
+  {name:"Dhoby Ghaut",    lat:1.2990,lng:103.8456,line:"CCL"},
+  {name:"Paya Lebar",     lat:1.3180,lng:103.8922,line:"CCL"},
+  {name:"one-north",      lat:1.2993,lng:103.7873,line:"CCL"},
+  // DTL
+  {name:"Bukit Panjang",  lat:1.3784,lng:103.7761,line:"DTL"},
+  {name:"Botanic Gardens",lat:1.3225,lng:103.8154,line:"DTL"},
+  {name:"Newton",         lat:1.3124,lng:103.8380,line:"DTL"},
+  {name:"Expo",           lat:1.3354,lng:103.9613,line:"DTL"},
+  // TEL
+  {name:"Woodlands North",lat:1.4480,lng:103.8002,line:"TEL"},
+  {name:"Stevens",        lat:1.3198,lng:103.8258,line:"TEL"},
+  {name:"Great World",    lat:1.2937,lng:103.8227,line:"TEL"},
+  {name:"Marine Parade",  lat:1.3022,lng:103.9065,line:"TEL"},
+  {name:"Bedok South",    lat:1.3215,lng:103.9401,line:"TEL"},
+];
+
+// District bboxes
+const DISTRICTS = {
+  "Marine Parade": [1.295, 103.893, 1.316, 103.935],
+  "Downtown CBD":  [1.277, 103.845, 1.295, 103.865],
+  "Tengah":        [1.360, 103.720, 1.390, 103.760],
+};
+
+// ── Map init ───────────────────────────────────────────────────────────────
+const map = L.map("map", {
+  center: [1.3521, 103.8198],
+  zoom: 12,
+  zoomControl: true,
+});
+
+// OneMap tiles (Singapore official basemap)
+L.tileLayer(
+  "https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png",
+  {
+    attribution: "OneMap &copy; SLA",
+    maxZoom: 18,
+    minZoom: 10,
+  }
+).addTo(map);
+
+// ── MRT stations ───────────────────────────────────────────────────────────
+MRT_STATIONS.forEach(station => {
+  const color = MRT_COLORS[station.line] || "#888";
+  const icon  = L.divIcon({
+    html: `<div style="
+      width:10px;height:10px;
+      background:${color};
+      border:2px solid white;
+      border-radius:50%;
+      box-shadow:0 1px 4px rgba(0,0,0,0.5);
+    "></div>`,
+    className: "",
+    iconSize: [10, 10],
+    iconAnchor: [5, 5],
+  });
+  L.marker([station.lat, station.lng], {icon})
+   .bindTooltip(`${station.name} (${station.line})`, {
+     className: "district-label",
+     direction: "top",
+     offset: [0, -8],
+   })
+   .addTo(map);
+});
+
+// ── District boxes ─────────────────────────────────────────────────────────
+Object.entries(DISTRICTS).forEach(([name, [minLat, minLon, maxLat, maxLon]]) => {
+  const rect = L.rectangle(
+    [[minLat, minLon], [maxLat, maxLon]],
+    {color: "#00BCD4", weight: 2, fillColor: "#00BCD4", fillOpacity: 0.08}
+  ).addTo(map);
+
+  const label = L.divIcon({
+    html: `<div class="district-label">${name}</div>`,
+    className: "",
+    iconAnchor: [0, 0],
+  });
+  L.marker([(minLat + maxLat) / 2, (minLon + maxLon) / 2], {icon: label, interactive: false})
+   .addTo(map);
+});
+
+// ── Legend ─────────────────────────────────────────────────────────────────
+const legendDiv = document.createElement("div");
+legendDiv.className = "legend";
+legendDiv.innerHTML = `
+  <div class="legend-title">MRT Lines</div>
+  ${Object.entries(MRT_COLORS).map(([line, color]) => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${color}"></div>
+      ${line}
+    </div>
+  `).join("")}
+  <div style="margin-top:8px;" class="legend-title">District</div>
+  <div class="legend-item">
+    <div class="legend-line" style="background:#00BCD4"></div>
+    Monitored area
+  </div>
+`;
+map.getContainer().appendChild(legendDiv);
+
+// ── Postal code search ─────────────────────────────────────────────────────
+let searchMarker = null;
+let busMarkers   = [];
+
+async function searchPostal(postal) {
+  document.getElementById("loading").style.display = "block";
+
+  try {
+    // 1. Geocode postal code via OneMap
+    const geoResp = await fetch(
+      `${ONEMAP_URL}?searchVal=${postal}&returnGeom=Y&getAddrDetails=Y`
+    );
+    const geoData = await geoResp.json();
+    const results = geoData.results || [];
+
+    if (!results.length) {
+      alert(`Postal code ${postal} not found!`);
+      return;
+    }
+
+    const loc  = results[0];
+    const lat  = parseFloat(loc.LATITUDE);
+    const lng  = parseFloat(loc.LONGITUDE);
+    const addr = loc.ADDRESS || postal;
+
+    // Clear previous markers
+    if (searchMarker) map.removeLayer(searchMarker);
+    busMarkers.forEach(m => map.removeLayer(m));
+    busMarkers = [];
+
+    // 2. Get connectivity score from our API
+    const delta = 0.005;
+    const evalResp = await fetch(
+      `${API_BASE}/evaluate?min_lon=${lng-delta}&max_lon=${lng+delta}&min_lat=${lat-delta}&max_lat=${lat+delta}`
+    ).catch(() => null);
+    const evalData = evalResp ? await evalResp.json() : {};
+
+    // 3. Create popup content
+    const score     = evalData.connectivity_score?.toFixed(1) || "—";
+    const taxis     = evalData.taxi_count ?? "—";
+    const busScore  = evalData.bus_frequency_score?.toFixed(0) || "—";
+    const friction  = evalData.friction_ratio?.toFixed(3) || "—";
+
+    const popupHtml = `
+      <div class="popup-card">
+        <div class="popup-header">📍 ${addr}</div>
+        <div class="popup-postal">S${postal}</div>
+        <div class="popup-score">
+          <div class="popup-score-value">${score}</div>
+          <div class="popup-score-label">Connectivity Score / 100</div>
+        </div>
+        <div class="popup-grid">
+          <div class="popup-metric">
+            <div class="popup-metric-label">🚕 Live Taxis</div>
+            <div class="popup-metric-value">${taxis}</div>
+            <div class="popup-metric-sub">nearby now</div>
+          </div>
+          <div class="popup-metric">
+            <div class="popup-metric-label">🚌 Bus Score</div>
+            <div class="popup-metric-value">${busScore}/100</div>
+            <div class="popup-metric-sub">frequency rating</div>
+          </div>
+          <div class="popup-metric">
+            <div class="popup-metric-label">⚡ Friction</div>
+            <div class="popup-metric-value">${friction}</div>
+            <div class="popup-metric-sub">demand pressure</div>
+          </div>
+          <div class="popup-metric">
+            <div class="popup-metric-label">🚏 Bus Stops</div>
+            <div class="popup-metric-value">${evalData.stops_in_bbox ?? "—"}</div>
+            <div class="popup-metric-sub">in district</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#68d391;text-align:center;">
+          ${evalData.verdict || ""}
+        </div>
+      </div>
+    `;
+
+    // 4. Add marker with popup
+    const icon = L.divIcon({
+      html: `<div style="
+        width:16px;height:16px;
+        background:#FF6B6B;
+        border:3px solid white;
+        border-radius:50%;
+        box-shadow:0 2px 8px rgba(0,0,0,0.5);
+      "></div>`,
+      className: "",
+      iconSize: [16,16],
+      iconAnchor: [8,8],
+    });
+
+    searchMarker = L.marker([lat, lng], {icon})
+      .addTo(map)
+      .bindPopup(popupHtml, {maxWidth: 300})
+      .openPopup();
+
+    map.setView([lat, lng], 15);
+
+  } finally {
+    document.getElementById("loading").style.display = "none";
+  }
+}
+
+// ── Listen for messages from Streamlit ────────────────────────────────────
+window.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "search_postal") {
+    searchPostal(event.data.postal);
+  }
+  if (event.data && event.data.type === "set_heatmap") {
+    updateHeatmap(event.data.points);
+  }
+});
+
+// ── Heatmap layer ─────────────────────────────────────────────────────────
+let heatLayer = null;
+
+function updateHeatmap(points) {
+  if (heatLayer) map.removeLayer(heatLayer);
+  if (!points || !points.length) return;
+  heatLayer = L.heatLayer(points, {
+    radius: 25,
+    blur: 15,
+    maxZoom: 17,
+    gradient: {0.0:"blue", 0.5:"lime", 1.0:"red"},
+  }).addTo(map);
+}
+
+// ── Click on map → search postal ───────────────────────────────────────────
+map.on("click", async (e) => {
+  const {lat, lng} = e.latlng;
+  document.getElementById("loading").style.display = "block";
+
+  try {
+    // Reverse geocode clicked location
+    const resp = await fetch(
+      `https://www.onemap.gov.sg/api/public/revgeocode?location=${lat},${lng}&buffer=50&addressType=HDB&otherFeatures=N`
+    );
+    const data = await resp.json();
+    const info = data.GeocodeInfo?.[0];
+
+    if (info?.POSTALCODE && info.POSTALCODE !== "NIL") {
+      searchPostal(info.POSTALCODE);
+    } else {
+      // No HDB block — just show coordinates
+      const score_resp = await fetch(
+        `${API_BASE}/evaluate?min_lon=${lng-0.005}&max_lon=${lng+0.005}&min_lat=${lat-0.005}&max_lat=${lat+0.005}`
+      ).catch(() => null);
+      const evalData = score_resp ? await score_resp.json() : {};
+      const score = evalData.connectivity_score?.toFixed(1) || "—";
+
+      if (searchMarker) map.removeLayer(searchMarker);
+      const icon = L.divIcon({
+        html:`<div style="width:12px;height:12px;background:#FF6B6B;border:2px solid white;border-radius:50%;"></div>`,
+        className:"",iconSize:[12,12],iconAnchor:[6,6],
+      });
+      searchMarker = L.marker([lat,lng],{icon})
+        .addTo(map)
+        .bindPopup(`
+          <div class="popup-card">
+            <div class="popup-header">📍 (${lat.toFixed(4)}, ${lng.toFixed(4)})</div>
+            <div class="popup-score">
+              <div class="popup-score-value">${score}</div>
+              <div class="popup-score-label">Connectivity Score</div>
+            </div>
+            <div style="font-size:11px;color:#a0aec0;text-align:center;">
+              ${evalData.verdict || "No HDB block at this location"}
+            </div>
+          </div>
+        `, {maxWidth:260})
+        .openPopup();
+    }
+  } finally {
+    document.getElementById("loading").style.display = "none";
+  }
+});
+
+// Notify parent that map is ready
+window.parent.postMessage({type: "map_ready"}, "*");
+</script>
+</body>
+</html>

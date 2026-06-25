@@ -59,9 +59,11 @@ class ScoreResponse(BaseModel):
     taxi_stability_score: float
     stops_in_bbox:        int
     avg_bus_headway_min:  float
-    bus_frequency_score:  float
-    connectivity_score:   float
-    verdict:              str
+    bus_frequency_score:   float
+    bus_redundancy_score:  float = 0.0
+    num_unique_routes:     int   = 0
+    connectivity_score:    float
+    verdict:               str
 
 
 class RankEntry(BaseModel):
@@ -129,6 +131,8 @@ def create_app(store: DataStore) -> FastAPI:
             avg_bus_headway_min=metrics.avg_bus_headway_min,
             bus_frequency_score=metrics.bus_frequency_score,
             connectivity_score=metrics.connectivity_score,
+            bus_redundancy_score=metrics.bus_redundancy_score,
+            num_unique_routes=metrics.num_unique_routes,
             verdict=metrics.verdict,
         )
 

@@ -248,12 +248,14 @@ if page == "📊 Dashboard":
     except Exception:
         bus_data = {}
 
-    b1, b2, b3, b4 = st.columns(4)
+    b1, b2, b3, b4, b5 = st.columns(5)
 
-    stops       = bus_data.get("stops_in_bbox", 0)
-    headway     = bus_data.get("avg_bus_headway_min", None)
-    bus_score   = bus_data.get("bus_frequency_score", None)
-    conn_score  = bus_data.get("connectivity_score", None)
+    stops         = bus_data.get("stops_in_bbox", 0)
+    headway       = bus_data.get("avg_bus_headway_min", None)
+    bus_score     = bus_data.get("bus_frequency_score", None)
+    conn_score    = bus_data.get("connectivity_score", None)
+    redundancy    = bus_data.get("bus_redundancy_score", None)
+    unique_routes = bus_data.get("num_unique_routes", 0)
 
     # Plain English headway label
     if headway:
@@ -272,7 +274,10 @@ if page == "📊 Dashboard":
               help="Average time between consecutive buses across all stops")
     b3.metric("📊 Bus Score",         f"{bus_score:.1f}/100" if bus_score is not None else "—",
               help="Bus frequency score (100 = buses every 2 min, 0 = buses every 30+ min)")
-    b4.metric("🏙️ Connectivity Score", f"{conn_score:.1f}/100" if conn_score is not None else "—",
+    b4.metric("🔀 Route Redundancy",  f"{redundancy:.0f}/100" if redundancy is not None else "—",
+              delta=f"{unique_routes} unique routes",
+              help="How many different bus services serve this district — more = more resilient!")
+    b5.metric("🏙️ Connectivity Score", f"{conn_score:.1f}/100" if conn_score is not None else "—",
               help="Overall district connectivity score combining bus + taxi metrics")
 
     # Bus score visual gauge

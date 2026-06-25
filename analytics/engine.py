@@ -187,6 +187,8 @@ def compute_metrics(store: DataStore, bbox: BBox) -> DistrictMetrics:
         stops_in_bbox=stops_in_bbox, avg_bus_headway_min=avg_bus_headway_min,
         bus_frequency_score=bus_frequency_score,
         connectivity_score=connectivity_score,
+        bus_redundancy_score=bus_redundancy_score,
+        num_unique_routes=num_unique_routes,
         verdict=_verdict(connectivity_score),
     )
 
