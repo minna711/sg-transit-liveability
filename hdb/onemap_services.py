@@ -112,7 +112,7 @@ def get_live_bus_arrivals(stop_code: str, lta_api_key: str) -> list[dict]:
     try:
         import requests as _req
         resp = _req.get(
-            "https://datamall2.mytransport.sg/ltaodataservice/BusArrivalv2",
+            "https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival",
             headers={"AccountKey": lta_api_key, "accept": "application/json"},
             params={"BusStopCode": stop_code},
             timeout=10,

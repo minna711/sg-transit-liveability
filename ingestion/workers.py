@@ -178,7 +178,7 @@ class TaxiWorker(_BaseWorker):
     interval = cfg.taxi_poll_interval
 
     def _poll(self) -> None:
-        records = get_paginated("v3/Taxi-Availability")
+        records = get_paginated("Taxi-Availability")
         if records:
             self._store.push_taxi_snapshot(records)
             log.debug("TaxiWorker: stored %d taxi coordinates", len(records))

@@ -1,0 +1,27 @@
+(sg-transit-liveability) PS C:\Users\drama\sg-transit-liveability> python -c "
+>> import requests, os
+>> key = os.environ.get('LTA_API_KEY', '')
+>> headers = {'AccountKey': key, 'accept': 'application/json'}
+>> for url in [
+>>     'https://datamall2.mytransport.sg/ltaodataservice/v3/Taxi-Availability',
+>>     'https://datamall2.mytransport.sg/ltaodataservice/Taxi-Availability',
+>> ]:
+>>     r = requests.get(url, headers=headers, timeout=10)
+>>     print(url, r.status_code)
+>> "
+https://datamall2.mytransport.sg/ltaodataservice/v3/Taxi-Availability 404
+https://datamall2.mytransport.sg/ltaodataservice/Taxi-Availability 200
+(sg-transit-liveability) PS C:\Users\drama\sg-transit-liveability> python -c "
+>> import requests, os
+>> key = os.environ.get('LTA_API_KEY', '')
+>> headers = {'AccountKey': key, 'accept': 'application/json'}
+>> for url in [
+>>     'https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival',
+>>     'https://datamall2.mytransport.sg/ltaodataservice/BusArrivalv2',
+>> ]:
+>>     r = requests.get(url, headers=headers, params={'BusStopCode': '83139'}, timeout=10)
+>>     print(url.split('/')[-1], r.status_code)
+>> "
+BusArrival 200
+BusArrivalv2 404
+(sg-transit-liveability) PS C:\Users\drama\sg-transit-liveability> 
