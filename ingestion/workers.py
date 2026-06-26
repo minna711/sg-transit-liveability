@@ -67,16 +67,29 @@ class DataStore:
         try:
             from storage.database import insert_snapshot
             from processing.spatial import filter_taxis_by_bbox
-            DISTRICT_BBOXES = {
-                "marine_parade": (103.893, 103.935, 1.295, 1.316),
-                "downtown_cbd":  (103.845, 103.865, 1.277, 1.295),
-                "tengah":        (103.720, 103.760, 1.360, 1.390),
-            }
-            for district, bbox in DISTRICT_BBOXES.items():
-                count = len(filter_taxis_by_bbox(records, bbox))
-                insert_snapshot(district, count)            
-        except Exception:
-            pass   # don't crash the worker if DB write fails
+            from hdb.planning_areas import load_all_planning_areas
+
+            # Load all 55 planning areas and save snapshot for each
+            areas = load_all_planning_areas()
+            if areas:
+                for area in areas:
+                    bbox  = (area["min_lon"], area["max_lon"],
+                             area["min_lat"], area["max_lat"])
+                    slug  = area["name"].lower().replace(" ", "_").replace("/","_").replace("-","_")
+                    count = len(filter_taxis_by_bbox(records, bbox))
+                    insert_snapshot(slug, count)
+            else:
+                # Fallback to 3 hardcoded districts
+                FALLBACK = {
+                    "marine_parade": (103.893, 103.935, 1.295, 1.316),
+                    "downtown_cbd":  (103.845, 103.865, 1.277, 1.295),
+                    "tengah":        (103.720, 103.760, 1.360, 1.390),
+                }
+                for district, bbox in FALLBACK.items():
+                    count = len(filter_taxis_by_bbox(records, bbox))
+                    insert_snapshot(district, count)
+        except Exception as e:
+            log.warning("Snapshot persist failed: %s", e)
 
     def get_last_two_snapshots(
         self,
@@ -165,7 +178,7 @@ class TaxiWorker(_BaseWorker):
     interval = cfg.taxi_poll_interval
 
     def _poll(self) -> None:
-        records = get_paginated("Taxi-Availability")
+        records = get_paginated("v3/Taxi-Availability")
         if records:
             self._store.push_taxi_snapshot(records)
             log.debug("TaxiWorker: stored %d taxi coordinates", len(records))
