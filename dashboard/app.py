@@ -14,6 +14,21 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from datetime import timezone, timedelta
+
+SGT = timezone(timedelta(hours=8))
+
+def to_sgt(dt_str: str) -> str:
+    """Convert UTC datetime string to SGT for display."""
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        sgt = dt.astimezone(SGT)
+        return sgt.strftime("%H:%M:%S SGT")
+    except Exception:
+        return dt_str
 
 from config import cfg
 from storage.database import (init_db, fetch_snapshots, fetch_predictions,
@@ -66,7 +81,7 @@ if page == "📊 Dashboard":
     lookback = st.sidebar.slider("History (minutes)", 30, 180, 60, step=15)
     auto_ref = st.sidebar.checkbox("Auto-refresh every 60s", value=True)
     if auto_ref:
-        st.sidebar.caption(f"Last refresh: {datetime.now().strftime('%H:%M:%S')}")
+        st.sidebar.caption(f"Last refresh: {datetime.now(SGT).strftime('%H:%M:%S SGT')}")
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("**MLOps**")

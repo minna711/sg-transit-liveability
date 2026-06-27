@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+SGT = timezone(timedelta(hours=8))
 
 import numpy as np
 
@@ -30,7 +32,7 @@ class Alert:
     value:        float
     threshold:    float
     message:      str
-    triggered_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    triggered_at: str = field(default_factory=lambda: datetime.now(SGT).isoformat())
 
     def to_dict(self) -> dict:
         return self.__dict__

@@ -16,7 +16,9 @@ import logging
 import random
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone, timedelta
+
+SGT = timezone(timedelta(hours=8)), timedelta, timezone
 
 import uvicorn
 
@@ -166,7 +168,7 @@ def run_seed() -> None:
     init_db()
     print("\nSeeding 7 days of synthetic history...")
     base = {"marine_parade": 22, "downtown_cbd": 55, "tengah": 8}
-    now  = datetime.utcnow()
+    now  = datetime.now(SGT)
     total = 0
     for district, base_count in base.items():
         prev = base_count

@@ -4,12 +4,13 @@ ml/batch_jobs.py
 MLOps batch scheduler using APScheduler.
   08:00 SGT daily  — retrain all district models
   08:05 SGT daily  — evaluate predictions vs actuals
-  every 30 min     — fresh predictions + anomaly checks
+  every 5 min      — fresh predictions + anomaly checks
+  every 60 min     — extended predictions
 """
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -22,11 +23,13 @@ from storage.database import fetch_snapshots
 
 log = logging.getLogger(__name__)
 
+SGT = timezone(timedelta(hours=8))
+
 DISTRICTS = ["marine_parade", "downtown_cbd", "tengah"]  # backward compat
 
 
 def get_districts() -> list[str]:
-    """Load all district slugs from planning_areas table. Returns empty list if none."""
+    """Load all district slugs from planning_areas table."""
     try:
         from hdb.planning_areas import load_all_planning_areas
         areas = load_all_planning_areas()
@@ -37,13 +40,14 @@ def get_districts() -> list[str]:
             ]
     except Exception as e:
         log.warning("Could not load planning areas: %s", e)
-    return []
+    return DISTRICTS  # fallback to 3 core districts
+
 
 _detector = AnomalyDetector()
 
 
 def job_train_all():
-    log.info("=== Batch: TRAIN ALL (%s) ===", datetime.utcnow().isoformat())
+    log.info("=== Batch: TRAIN ALL (%s) ===", datetime.now(SGT).isoformat())
     for district in get_districts():
         try:
             TaxiForecaster(district).train(lookback_min=1440)
@@ -52,7 +56,7 @@ def job_train_all():
 
 
 def job_evaluate_all():
-    log.info("=== Batch: EVALUATE ALL (%s) ===", datetime.utcnow().isoformat())
+    log.info("=== Batch: EVALUATE ALL (%s) ===", datetime.now(SGT).isoformat())
     for district in get_districts():
         try:
             TaxiForecaster(district).evaluate()
@@ -61,7 +65,7 @@ def job_evaluate_all():
 
 
 def job_predict_and_check():
-    log.info("=== Batch: PREDICT + ANOMALY CHECK (%s) ===", datetime.utcnow().isoformat())
+    log.info("=== Batch: PREDICT + ANOMALY CHECK (%s) ===", datetime.now(SGT).isoformat())
     for district in get_districts():
         try:
             preds  = TaxiForecaster(district).predict()
@@ -75,27 +79,24 @@ def job_predict_and_check():
 
 def job_extended_predictions():
     """Every hour — run extended predictions for all districts."""
-    log.info("=== Batch: EXTENDED PREDICTIONS (%s) ===", datetime.utcnow().isoformat())
+    log.info("=== Batch: EXTENDED PREDICTIONS (%s) ===", datetime.now(SGT).isoformat())
     for district in get_districts():
         try:
-            # 24-hour hourly forecast
             hf   = HourlyForecaster(district)
             df24 = hf.predict_24h()
             log.info("[%s] 24hr forecast: %d hours", district, len(df24))
 
-            # Peak hour prediction
-            ph     = PeakHourPredictor(district)
-            peaks  = ph.predict_peaks()
+            ph    = PeakHourPredictor(district)
+            peaks = ph.predict_peaks()
             log.info("[%s] Peak predictions: %d slots", district, len(peaks))
 
         except Exception as exc:
             log.exception("[%s] Extended prediction failed: %s", district, exc)
 
-    # HDB price forecasts (once daily is enough)
     try:
         for town in ["MARINE PARADE", "TAMPINES", "PUNGGOL", "TENGAH", "WOODLANDS"]:
             for flat_type in ["4 ROOM", "5 ROOM"]:
-                hpf = HDBPriceForecaster(town, flat_type)
+                hpf     = HDBPriceForecaster(town, flat_type)
                 summary = hpf.summary()
                 if summary:
                     log.info("[%s %s] Price forecast: %s", town, flat_type, summary["trend"])
@@ -105,15 +106,18 @@ def job_extended_predictions():
 
 def create_batch_scheduler() -> BackgroundScheduler:
     sched = BackgroundScheduler(timezone="Asia/Singapore")
-    sched.add_job(job_train_all,       CronTrigger(hour=8, minute=0),
-                  id="train",   misfire_grace_time=300, replace_existing=True)
-    sched.add_job(job_evaluate_all,    CronTrigger(hour=8, minute=5),
-                  id="evaluate", misfire_grace_time=300, replace_existing=True)
-    sched.add_job(job_predict_and_check, IntervalTrigger(minutes=30),
-                  id="predict",  replace_existing=True)
-    # Extended predictions every hour
+
+    sched.add_job(job_train_all, CronTrigger(hour=8, minute=0),
+                  id="job_train_all", misfire_grace_time=300, replace_existing=True)
+
+    sched.add_job(job_evaluate_all, CronTrigger(hour=8, minute=5),
+                  id="job_evaluate_all", misfire_grace_time=300, replace_existing=True)
+
+    sched.add_job(job_predict_and_check, IntervalTrigger(minutes=5),
+                  id="job_predict_and_check", replace_existing=True)
+
     sched.add_job(job_extended_predictions, IntervalTrigger(minutes=60),
-                  id="extended_predict", replace_existing=True)
+                  id="job_extended_predictions", replace_existing=True)
 
     log.info("Batch scheduler configured: %d jobs", len(sched.get_jobs()))
     return sched

@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import logging
 import pickle
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
+
+SGT = timezone(timedelta(hours=8))
 from pathlib import Path
 from typing import Optional
 
@@ -115,7 +117,7 @@ class HourlyForecaster:
             return pd.DataFrame()
 
         row = df[FEATURE_COLS].iloc[[-1]].values
-        now = datetime.utcnow()
+        now = datetime.now(SGT)
         records = []
 
         for h in HOURLY_HORIZONS:
@@ -188,7 +190,7 @@ class PeakHourPredictor:
         df["hour"]    = df["fetched_at"].dt.hour
         df["weekday"] = df["fetched_at"].dt.weekday
 
-        tomorrow      = datetime.utcnow() + timedelta(days=days_ahead)
+        tomorrow      = datetime.now(SGT) + timedelta(days=days_ahead)
         target_day    = tomorrow.weekday()
         overall_avg   = df["taxi_count"].mean()
 
